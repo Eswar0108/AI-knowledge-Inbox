@@ -20,6 +20,7 @@ WHAT WOULD BE BETTER AT SCALE:
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import chromadb
 
@@ -28,8 +29,8 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # Module-level ChromaDB client
-_client: chromadb.PersistentClient | None = None
-_collection: chromadb.Collection | None = None
+_client: Any = None
+_collection: Any = None
 
 COLLECTION_NAME = "knowledge_chunks"
 
