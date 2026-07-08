@@ -10,6 +10,9 @@ venv/
 
 # Data (local only)
 data/
+chroma/
+*.sqlite3
+*.db
 
 # IDE
 .vscode/
