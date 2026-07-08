@@ -1,9 +1,7 @@
 """
-RAG orchestrator — ties all services together into the retrieval-augmented generation pipeline.
+RAG orchestrator — updated to orchestrate a Lightweight Multi-Agent pipeline.
 
-THIS IS THE CORE OF THE APP. Here's the full flow:
-
-INGESTION FLOW (when user adds content):
+INGESTION FLOW (unmodified):
   1. User submits text or URL
   2. If URL → scraper fetches the page content
   3. Chunker splits content into overlapping chunks
@@ -11,23 +9,21 @@ INGESTION FLOW (when user adds content):
   5. Vector store saves the vectors + metadata
   6. Database saves the item metadata
 
-QUERY FLOW (when user asks a question):
+QUERY FLOW (updated to Multi-Agent):
   1. User submits a question
-  2. Embedder converts the question into a vector
-  3. Vector store finds the most similar chunks (top-K)
-  4. LLM receives the chunks + question and generates an answer
-  5. Response includes the answer + cited source snippets
-
-WHY A SEPARATE ORCHESTRATOR:
-- Keeps each service focused on one job (separation of concerns)
-- The routes just call the orchestrator — they don't know about chunking/embedding/etc.
-- Easy to test each service independently
-- Easy to swap components (e.g., switch from ChromaDB to Pinecone)
+  2. RouterAgent decides the route ('LOCAL', 'WEB', or 'DIRECT')
+  3. If 'LOCAL' -> RAGRetrieverAgent fetches context from ChromaDB
+  4. If 'WEB'   -> WebResearcherAgent searches live DuckDuckGo
+  5. If 'DIRECT'-> Direct LLM chat response (greetings, banter)
+  6. WriterAgent synthesizes the answer with citations
 """
 
 import logging
+from typing import Any
 
+from app.config import settings
 from app.services import chunker, embedder, scraper, vector_store, llm
+from app.services.agents import RouterAgent, RAGRetrieverAgent, WebResearcherAgent, WriterAgent
 from app import database
 from app.models import SourceType
 
@@ -37,17 +33,6 @@ logger = logging.getLogger(__name__)
 def ingest_content(content: str, source_type: SourceType) -> dict:
     """
     Full ingestion pipeline: process content → chunk → embed → store.
-
-    Args:
-        content: Raw text (for notes) or URL (for urls)
-        source_type: SourceType.NOTE or SourceType.URL
-
-    Returns:
-        dict with: id, message, chunks_created
-
-    Raises:
-        ValueError: If content can't be processed
-        ConnectionError: If URL can't be fetched
     """
     source_url = None
 
@@ -95,46 +80,95 @@ def ingest_content(content: str, source_type: SourceType) -> dict:
 
 def query_knowledge(question: str) -> dict:
     """
-    Full RAG query pipeline: embed question → search → generate answer.
-
-    Args:
-        question: The user's question
-
-    Returns:
-        dict with: answer, sources
-
-    Raises:
-        RuntimeError: If LLM or vector store isn't initialized
+    Multi-Agent query orchestrator pipeline:
+    Route intent -> Query context (DB or Web) -> Synthesize response.
     """
-    logger.info("Processing query: '%s'", question[:100])
+    logger.info("Starting Multi-Agent query flow: '%s'", question[:100])
 
-    # Step 1: Embed the question
-    query_embedding = embedder.get_single_embedding(question)
+    # Step 1: Route the intent
+    route_decision = RouterAgent.route(question)
 
-    # Step 2: Search for relevant chunks
-    relevant_chunks = vector_store.search(query_embedding)
+    # Step 2: Handle routing branches
+    if route_decision == "DIRECT":
+        logger.info("Routing query directly to LLM (DIRECT mode)")
+        try:
+            client = llm._client
+            if client is None:
+                raise RuntimeError("LLM client not ready.")
 
-    if not relevant_chunks:
-        return {
-            "answer": "I don't have enough saved content to answer this question. Try adding some notes or URLs first!",
-            "sources": [],
-        }
+            response = client.chat.completions.create(
+                model=settings.llm_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful knowledge inbox assistant. Respond to the user's greeting or question directly, politely, and concisely."
+                    },
+                    {"role": "user", "content": question},
+                ],
+                temperature=0.5,
+                max_tokens=512,
+            )
+            answer = response.choices[0].message.content
+            return {
+                "answer": answer,
+                "sources": [],
+            }
+        except Exception as e:
+            logger.error("Direct LLM response failed: %s. Falling back to local RAG", str(e))
+            route_decision = "LOCAL"
 
-    # Step 3: Generate answer using LLM with context
-    answer = llm.generate_answer(question, relevant_chunks)
+    # Step 3: Retrieval execution
+    context_chunks = []
+    sources = []
 
-    # Step 4: Format sources for the response
-    sources = [
-        {
-            "content": chunk["content"],
-            "item_id": chunk["item_id"],
-            "source_type": chunk["source_type"],
-            "score": round(chunk["score"], 4),
-        }
-        for chunk in relevant_chunks
-    ]
+    if route_decision == "LOCAL":
+        # RAG Local search
+        retrieved_data = RAGRetrieverAgent.retrieve(question)
+        for chunk in retrieved_data:
+            context_chunks.append({
+                "content": chunk["content"],
+                "source_type": chunk["source_type"],
+            })
+            sources.append({
+                "content": chunk["content"],
+                "item_id": chunk["item_id"],
+                "source_type": chunk["source_type"],
+                "score": round(chunk["score"], 4),
+            })
+            
+        if not context_chunks:
+            return {
+                "answer": "I couldn't find any relevant saved notes or URLs in your inbox to answer this question. Try adding some bookmarks first!",
+                "sources": [],
+            }
 
-    logger.info("Query processed: %d sources cited", len(sources))
+    elif route_decision == "WEB":
+        # Web Search Agent
+        search_results = WebResearcherAgent.research(question)
+        for i, res in enumerate(search_results):
+            # Format to match the context expected by WriterAgent and response format
+            snippet = res.get("snippet", "")
+            url = res.get("url", "")
+            title = res.get("title", f"Web Result {i+1}")
+            
+            context_chunks.append({
+                "content": f"{title}: {snippet}",
+                "source_type": "web",
+            })
+            sources.append({
+                "content": f"{title} - {snippet}",
+                "item_id": url, # Use web link as item_id
+                "source_type": SourceType.WEB.value,
+                "score": 0.0, # Web results have standard score
+            })
+
+        if not context_chunks:
+            # Fallback to local if web search fails
+            logger.warning("Web search returned no results. Falling back to local search.")
+            return query_knowledge(question)
+
+    # Step 4: Synthesize answer
+    answer = WriterAgent.synthesize(question, context_chunks, route_decision)
 
     return {
         "answer": answer,

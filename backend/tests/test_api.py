@@ -91,3 +91,26 @@ class TestQueryEndpoint:
     def test_query_missing_question_fails(self, client):
         response = client.post("/api/query", json={})
         assert response.status_code == 422
+
+    def test_query_success_direct(self, client):
+        # A simple greeting should route to DIRECT mode
+        response = client.post("/api/query", json={
+            "question": "Hello there! How are you?"
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "answer" in data
+        assert len(data["answer"]) > 0
+        assert data["sources"] == []
+
+    def test_query_success_web(self, client):
+        # General knowledge should route to WEB mode and return web search results
+        response = client.post("/api/query", json={
+            "question": "What is the capital city of France?"
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "answer" in data
+        assert len(data["sources"]) > 0
+        assert any(s["source_type"] == "web" for s in data["sources"])
+

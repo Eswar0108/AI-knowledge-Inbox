@@ -18,6 +18,7 @@ class SourceType(str, Enum):
     """Type of content source."""
     NOTE = "note"
     URL = "url"
+    WEB = "web"
 
 
 # --- Request Models ---
