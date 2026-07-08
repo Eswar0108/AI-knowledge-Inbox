@@ -1,59 +1,160 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Sidebar from './components/Sidebar';
 import IngestForm from './components/IngestForm';
 import ItemsList from './components/ItemsList';
 import QueryBox from './components/QueryBox';
 import AnswerDisplay from './components/AnswerDisplay';
+import SavedItemsTable from './components/SavedItemsTable';
+import { getItems } from './api/client';
 
-/**
- * App — Main application component.
- *
- * Layout:
- * - Left column: Add content (IngestForm) + Saved items (ItemsList)
- * - Right column: Ask question (QueryBox) + Answer display (AnswerDisplay)
- *
- * State management:
- * - refreshTrigger: counter that increments on successful ingestion → triggers ItemsList refresh
- * - queryResult: stores the latest query response → passed to AnswerDisplay
- */
 export default function App() {
-  // Debug logging to verify environment variable injection in Vercel
-  console.log("DEBUG: Configured VITE_API_URL is:", import.meta.env.VITE_API_URL || "(Empty/Relative)");
+  const [activeTab, setActiveTab] = useState('home');
+  const [darkMode, setDarkMode] = useState(true);
 
-  // Incrementing this triggers ItemsList to re-fetch
+  // Centralized items store to sync dashboard and items list
+  const [items, setItems] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [loadingItems, setLoadingItems] = useState(true);
+  const [itemsError, setItemsError] = useState(null);
 
-  // Latest query result from the RAG pipeline
+  // Selected query output and active question
   const [queryResult, setQueryResult] = useState(null);
+  const [activeQuestion, setActiveQuestion] = useState('');
+
+  // Toggle .dark-mode class on body element
+  useEffect(() => {
+    if (darkMode) {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+  }, [darkMode]);
+
+  // Synchronize items centrally
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        setLoadingItems(true);
+        const data = await getItems();
+        setItems(data.items || []);
+        setItemsError(null);
+      } catch (err) {
+        setItemsError(err.message);
+      } finally {
+        setLoadingItems(false);
+      }
+    };
+    fetchItems();
+  }, [refreshTrigger]);
+
+  // Dynamic greeting based on time of day
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
 
   const handleIngestSuccess = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  const handleQueryResult = (result) => {
+  const handleQueryStart = (question) => {
+    setActiveQuestion(question);
+    setQueryResult(null); // Clear previous answer
+  };
+
+  const handleQueryResult = (result, question) => {
     setQueryResult(result);
   };
 
+  const handleResetQuery = () => {
+    setQueryResult(null);
+    setActiveQuestion('');
+  };
+
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>
-          <span>AI Knowledge</span> Inbox
-        </h1>
-        <p>Save notes & URLs, then ask questions powered by AI</p>
-      </header>
+    <div className="app-container">
+      {/* Sidebar Navigation */}
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        darkMode={darkMode} 
+        setDarkMode={setDarkMode} 
+      />
 
-      <main className="app-content">
-        {/* Left: Add content + view saved items */}
-        <div className="left-column">
-          <IngestForm onIngestSuccess={handleIngestSuccess} />
-          <ItemsList refreshTrigger={refreshTrigger} />
+      {/* Main Panel Viewport */}
+      <main className="main-content" style={{ display: 'flex', gap: '32px', width: '100%', minWidth: 0 }}>
+        {/* Left/Middle Column (Dynamic active page content) */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* --- 1. HOME TAB (DASHBOARD GRID) --- */}
+          {activeTab === 'home' && (
+            <div>
+              <header className="view-header">
+                <h1 className="view-title">{getGreeting()}, Tejeswar 👋</h1>
+                <p className="view-subtitle">Save content and ask anything about it.</p>
+              </header>
+
+              <div className="dashboard-grid">
+                {/* Add Content split cards */}
+                <div className="add-cards-row">
+                  <IngestForm onIngestSuccess={handleIngestSuccess} fixedType="note" />
+                  <IngestForm onIngestSuccess={handleIngestSuccess} fixedType="url" />
+                </div>
+
+                {/* Saved items table */}
+                <div className="full-width-card">
+                  <SavedItemsTable 
+                    items={items} 
+                    limit={5} 
+                    onViewAll={() => setActiveTab('items')} 
+                  />
+                </div>
+
+                {/* Quick Query Box */}
+                <div className="full-width-card">
+                  <QueryBox onResult={handleQueryResult} onQueryStart={handleQueryStart} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* --- 2. ASK TAB (Dedicated query prompt card) --- */}
+          {activeTab === 'ask' && (
+            <div>
+              <header className="view-header">
+                <h1 className="view-title">Ask a Question</h1>
+                <p className="view-subtitle">Retrieve answers from saved notebooks and live web searches</p>
+              </header>
+
+              <div style={{ maxWidth: '640px' }}>
+                <QueryBox onResult={handleQueryResult} onQueryStart={handleQueryStart} />
+              </div>
+            </div>
+          )}
+
+          {/* --- 3. ITEMS TAB (FULL CONTENT LIST) --- */}
+          {activeTab === 'items' && (
+            <div>
+              <header className="view-header">
+                <h1 className="view-title">Saved Items</h1>
+                <p className="view-subtitle">Full list of ingested documents and web URLs</p>
+              </header>
+              <ItemsList refreshTrigger={refreshTrigger} />
+            </div>
+          )}
         </div>
 
-        {/* Right: Ask questions + view answers */}
-        <div className="right-column">
-          <QueryBox onResult={handleQueryResult} />
-          <AnswerDisplay result={queryResult} />
-        </div>
+        {/* Right Docked Answer Panel (Home and Ask views only) */}
+        {(activeTab === 'home' || activeTab === 'ask') && (activeQuestion || queryResult) && (
+          <div className="right-docked-panel" style={{ width: '420px', flexShrink: 0, height: 'fit-content' }}>
+            <AnswerDisplay 
+              result={queryResult} 
+              question={activeQuestion} 
+              onReset={handleResetQuery} 
+            />
+          </div>
+        )}
       </main>
     </div>
   );

@@ -86,6 +86,33 @@ async def lifespan(app: FastAPI):
     llm.init_llm()
     logger.info("✅ LLM client initialized")
 
+    # 5. Seed database with professional documents if empty
+    try:
+        items = database.get_all_items()
+        if not items:
+            logger.info("Database is empty. Seeding professional default notes...")
+            from app.models import SourceType
+            from app.services import rag
+            seed_items = [
+                {
+                    "content": "Design Patterns: Route-Service-Orchestrator Pattern. The Route-Service-Orchestrator pattern isolates request handling, business logic, and coordination layers. Routes validate requests and map endpoints; Services execute specific tasks (like vector searches or scraping); Orchestrators coordinate multiple services to complete high-level actions (like RAG pipelines).",
+                    "type": "note"
+                },
+                {
+                    "content": "ChromaDB Persistent Client in Python. ChromaDB runs in-process using sqlite3 for local persistence. When typing ChromaDB persistent clients in Python 3.10+, type variables as typing.Any to prevent TypeErrors at runtime, as chromadb.PersistentClient is evaluated as a factory function rather than a standard type.",
+                    "type": "note"
+                },
+                {
+                    "content": "Redis Persistence Configurations. Redis provides two main persistence mechanisms: RDB (Redis Database) which creates point-in-time snapshots of the dataset at specified intervals, and AOF (Append Only File) which logs every write operation received by the server to be played back at startup. For high durability, combining both RDB and AOF is recommended.",
+                    "type": "note"
+                }
+            ]
+            for item in seed_items:
+                rag.ingest_content(item["content"], SourceType(item["type"]))
+            logger.info("✅ Database seeded successfully with professional data")
+    except Exception as e:
+        logger.error("Failed to seed database: %s", str(e))
+
     logger.info("🎉 AI Knowledge Inbox is ready!")
     logger.info("📖 API docs available at http://localhost:8000/docs")
 

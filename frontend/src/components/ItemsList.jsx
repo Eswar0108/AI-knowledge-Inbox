@@ -55,41 +55,106 @@ export default function ItemsList({ refreshTrigger }) {
   };
 
   return (
-    <div className="card" id="items-list">
-      <h2 className="card-title">
-        <span className="icon">📚</span>
-        Saved Items
-        {items.length > 0 && (
-          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 400 }}>
-            ({items.length})
-          </span>
-        )}
-      </h2>
-
+    <div id="items-list-view">
       {loading ? (
-        <div className="loading">
-          <span className="spinner" />
+        <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
+          <span className="spinner" style={{ marginRight: '8px' }} />
           Loading items...
         </div>
       ) : error ? (
-        <div className="status-message status-error">{error}</div>
+        <div className="status-msg error">{error}</div>
       ) : items.length === 0 ? (
-        <div className="empty-state">
-          <span className="icon">📭</span>
-          <p>No items yet. Add a note or URL above!</p>
+        <div className="card">
+          <div className="empty-state">
+            <span className="icon">📭</span>
+            <p>No items yet. Add a note or URL on the dashboard!</p>
+          </div>
         </div>
       ) : (
-        <div className="items-list">
+        <div className="items-list-grid" style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+          gap: '24px',
+          marginTop: '12px'
+        }}>
           {items.map((item) => (
-            <div key={item.id} className="item-card">
-              <div className="item-header">
-                <span className={`item-badge ${item.source_type}`}>
-                  {item.source_type === 'note' ? '📝' : '🔗'} {item.source_type}
+            <div key={item.id} className="card item-card" style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              height: '100%',
+              minHeight: '180px'
+            }}>
+              <div className="item-card-header" style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <span className={`badge ${item.source_type}`}>
+                  {item.source_type === 'note' ? 'Note' : 'URL'}
                 </span>
-                <span className="item-meta">{formatDate(item.created_at)}</span>
+                <span className="item-card-time" style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--color-text-muted)'
+                }}>
+                  {formatDate(item.created_at)}
+                </span>
               </div>
-              <p className="item-preview">{item.content_preview}</p>
-              <div className="item-chunks">{item.chunk_count} chunk{item.chunk_count !== 1 ? 's' : ''}</div>
+              
+              <p className="item-card-preview" style={{
+                fontSize: '0.875rem',
+                color: 'var(--color-text-secondary)',
+                lineHeight: '1.6',
+                flexGrow: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: '-webkit-box',
+                WebkitLineClamp: 4,
+                WebkitBoxOrient: 'vertical',
+                wordBreak: 'break-word'
+              }}>
+                {item.content_preview}
+              </p>
+              
+              <div className="item-card-footer" style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderTop: '1px solid var(--color-border)',
+                paddingTop: '12px',
+                marginTop: '4px'
+              }}>
+                <span className="item-card-chunks" style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--color-text-muted)',
+                  fontWeight: 500
+                }}>
+                  {item.chunk_count} chunk{item.chunk_count !== 1 ? 's' : ''}
+                </span>
+                {item.source_url && (
+                  <a 
+                    href={item.source_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--color-primary)',
+                      textDecoration: 'none',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '2px'
+                    }}
+                  >
+                    Visit link
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                      <polyline points="15 3 21 3 21 9"/>
+                      <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                  </a>
+                )}
+              </div>
             </div>
           ))}
         </div>
