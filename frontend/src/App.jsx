@@ -62,6 +62,7 @@ export default function App() {
   const handleQueryStart = (question) => {
     setActiveQuestion(question);
     setQueryResult(null); // Clear previous answer
+    setActiveTab('ask'); // Switch to Ask tab to show answer below input
   };
 
   const handleQueryResult = (result, question) => {
@@ -84,75 +85,67 @@ export default function App() {
       />
 
       {/* Main Panel Viewport */}
-      <main className="main-content" style={{ display: 'flex', gap: '32px', width: '100%', minWidth: 0 }}>
-        {/* Left/Middle Column (Dynamic active page content) */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* --- 1. HOME TAB (DASHBOARD GRID) --- */}
-          {activeTab === 'home' && (
-            <div>
-              <header className="view-header">
-                <h1 className="view-title">{getGreeting()}, Tejeswar 👋</h1>
-                <p className="view-subtitle">Save content and ask anything about it.</p>
-              </header>
+      <main className="main-content">
+        {/* --- 1. HOME TAB (DASHBOARD GRID) --- */}
+        {activeTab === 'home' && (
+          <div>
+            <header className="view-header">
+              <h1 className="view-title">{getGreeting()}, Tejeswar 👋</h1>
+              <p className="view-subtitle">Save content and ask anything about it.</p>
+            </header>
 
-              <div className="dashboard-grid">
-                {/* Add Content split cards */}
-                <div className="add-cards-row">
-                  <IngestForm onIngestSuccess={handleIngestSuccess} fixedType="note" />
-                  <IngestForm onIngestSuccess={handleIngestSuccess} fixedType="url" />
-                </div>
-
-                {/* Saved items table */}
-                <div className="full-width-card">
-                  <SavedItemsTable 
-                    items={items} 
-                    limit={5} 
-                    onViewAll={() => setActiveTab('items')} 
-                  />
-                </div>
-
-                {/* Quick Query Box */}
-                <div className="full-width-card">
-                  <QueryBox onResult={handleQueryResult} onQueryStart={handleQueryStart} />
-                </div>
+            <div className="dashboard-grid">
+              {/* Add Content split cards */}
+              <div className="add-cards-row">
+                <IngestForm onIngestSuccess={handleIngestSuccess} fixedType="note" />
+                <IngestForm onIngestSuccess={handleIngestSuccess} fixedType="url" />
               </div>
-            </div>
-          )}
 
-          {/* --- 2. ASK TAB (Dedicated query prompt card) --- */}
-          {activeTab === 'ask' && (
-            <div>
-              <header className="view-header">
-                <h1 className="view-title">Ask a Question</h1>
-                <p className="view-subtitle">Retrieve answers from saved notebooks and live web searches</p>
-              </header>
+              {/* Saved items table */}
+              <div className="full-width-card">
+                <SavedItemsTable 
+                  items={items} 
+                  limit={5} 
+                  onViewAll={() => setActiveTab('items')} 
+                />
+              </div>
 
-              <div style={{ maxWidth: '640px' }}>
+              {/* Quick Query Box */}
+              <div className="full-width-card">
                 <QueryBox onResult={handleQueryResult} onQueryStart={handleQueryStart} />
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* --- 3. ITEMS TAB (FULL CONTENT LIST) --- */}
-          {activeTab === 'items' && (
-            <div>
-              <header className="view-header">
-                <h1 className="view-title">Saved Items</h1>
-                <p className="view-subtitle">Full list of ingested documents and web URLs</p>
-              </header>
-              <ItemsList refreshTrigger={refreshTrigger} />
-            </div>
-          )}
-        </div>
+        {/* --- 2. ASK TAB (Vertical input -> answer flow) --- */}
+        {activeTab === 'ask' && (
+          <div style={{ maxWidth: '800px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <header className="view-header">
+              <h1 className="view-title">Ask a Question</h1>
+              <p className="view-subtitle">Retrieve answers from saved notebooks and live web searches</p>
+            </header>
 
-        {/* Right Docked Answer Panel (Home and Ask views only) */}
-        {(activeTab === 'home' || activeTab === 'ask') && (activeQuestion || queryResult) && (
-          <div className="right-docked-panel" style={{ width: '420px', flexShrink: 0, height: 'fit-content' }}>
-            <AnswerDisplay 
-              result={queryResult} 
-              question={activeQuestion} 
-              onReset={handleResetQuery} 
-            />
+            <QueryBox onResult={handleQueryResult} onQueryStart={handleQueryStart} />
+
+            {(activeQuestion || queryResult) && (
+              <AnswerDisplay 
+                result={queryResult} 
+                question={activeQuestion} 
+                onReset={handleResetQuery} 
+              />
+            )}
+          </div>
+        )}
+
+        {/* --- 3. ITEMS TAB (FULL CONTENT LIST) --- */}
+        {activeTab === 'items' && (
+          <div>
+            <header className="view-header">
+              <h1 className="view-title">Saved Items</h1>
+              <p className="view-subtitle">Full list of ingested documents and web URLs</p>
+            </header>
+            <ItemsList refreshTrigger={refreshTrigger} />
           </div>
         )}
       </main>

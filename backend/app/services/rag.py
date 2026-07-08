@@ -129,9 +129,16 @@ def query_knowledge(question: str) -> dict:
                 "content": chunk["content"],
                 "source_type": chunk["source_type"],
             })
+            
+            source_url = None
+            if chunk["source_type"] == "url":
+                item_details = database.get_item_by_id(chunk["item_id"])
+                if item_details:
+                    source_url = item_details.get("source_url")
+
             sources.append({
                 "content": chunk["content"],
-                "item_id": chunk["item_id"],
+                "item_id": source_url if source_url else chunk["item_id"],
                 "source_type": chunk["source_type"],
                 "score": round(chunk["score"], 4),
             })

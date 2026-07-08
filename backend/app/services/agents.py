@@ -38,7 +38,16 @@ class DDGHTMLParser(HTMLParser):
         # result__a is the class for search result title links
         if tag == "a" and attrs_dict.get("class") == "result__a":
             self.in_title = True
-            self.current_result = {"url": attrs_dict.get("href", "")}
+            raw_url = attrs_dict.get("href", "")
+            import urllib.parse
+            if "uddg=" in raw_url:
+                parsed = urllib.parse.urlparse(raw_url)
+                params = urllib.parse.parse_qs(parsed.query)
+                if "uddg" in params:
+                    raw_url = params["uddg"][0]
+            elif raw_url.startswith("/"):
+                raw_url = "https://duckduckgo.com" + raw_url
+            self.current_result = {"url": raw_url}
         # result__snippet is the class for result descriptions
         elif tag == "a" and attrs_dict.get("class") == "result__snippet":
             self.in_snippet = True
