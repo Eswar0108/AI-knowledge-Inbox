@@ -16,6 +16,9 @@ import AnswerDisplay from './components/AnswerDisplay';
  * - queryResult: stores the latest query response → passed to AnswerDisplay
  */
 export default function App() {
+  // Debug logging to verify environment variable injection in Vercel
+  console.log("DEBUG: Configured VITE_API_URL is:", import.meta.env.VITE_API_URL || "(Empty/Relative)");
+
   // Incrementing this triggers ItemsList to re-fetch
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
