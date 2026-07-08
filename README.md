@@ -74,13 +74,20 @@ SQLite    ChromaDB         Groq API
 (metadata) (vectors)    (LLM answers)
 ```
 
-### RAG Pipeline Flow
+### Pipeline & Multi-Agent Architecture
 
-**Ingestion** (when you add content):
-1. Text → Chunker (fixed-size with overlap) → Embedder (sentence-transformers) → ChromaDB + SQLite
+**Ingestion Flow** (when you add content):
+1. Text input or scraped URL → **Chunker** (fixed-size with sentence-boundary adjustment) → **Embedder** (sentence-transformers) → **ChromaDB** (vectors) & **SQLite** (metadata).
 
-**Query** (when you ask a question):
-1. Question → Embedder → ChromaDB (semantic search) → Top-K chunks → Groq LLM → Answer with citations
+**Query Flow** (using our Custom Multi-Agent System):
+1. **User Question** is received by the backend.
+2. **Router Agent** analyzes the query intent using zero-shot classification on Groq:
+   - `DIRECT`: Greeting/conversational chatter → Bypasses search, replies directly.
+   - `LOCAL`: Inquiry about saved database bookmarks/notes → Triggers **RAG Retriever Agent**.
+   - `WEB`: General knowledge or queries requiring search → Triggers **Web Researcher Agent**.
+3. **RAG Retriever Agent** fetches matching context vector embeddings from ChromaDB.
+4. **Web Researcher Agent** runs a real-time key-less DuckDuckGo search and extracts HTML content snippets for general queries.
+5. **Writer/Synthesis Agent** compiles retrieved evidence, builds a context-constrained prompt, and generates the final answer on Groq citing sources (with support for both local file IDs and direct web hyperlinks).
 
 ---
 
